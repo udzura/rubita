@@ -1,8 +1,14 @@
 # frozen_string_literal: true
 
+require "ripper"
+
 require_relative "rubita/version"
+require_relative "rubita/transpiler"
 
 module Rubita
   class Error < StandardError; end
-  # Your code goes here...
+
+  def self.transpile(source)
+    Transpiler.new.transpile(source)
+  end
 end
