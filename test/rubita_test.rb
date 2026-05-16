@@ -182,4 +182,40 @@ class RubitaTest < Test::Unit::TestCase
 
     assert_equal(expected, Rubita.transpile(source))
   end
+
+  test "transpiles TRACEPOINT_PROBE with dotted field access argument" do
+    source = <<~RUBY
+      TRACEPOINT_PROBE :random, :urandom_read do |_ctx|
+        bpf_trace_printk("%d\\n", args.got_bits)
+        0
+      end
+    RUBY
+
+    expected = <<~C.chomp
+      TRACEPOINT_PROBE(random, urandom_read) {
+        bpf_trace_printk("%d\\n", args->got_bits);
+        return 0;
+      }
+    C
+
+    assert_equal(expected, Rubita.transpile(source))
+  end
+
+  test "transpiles TRACEPOINT_PROBE without block parameter" do
+    source = <<~RUBY
+      TRACEPOINT_PROBE :random, :urandom_read do
+        bpf_trace_printk("%d\\n", args.got_bits)
+        0
+      end
+    RUBY
+
+    expected = <<~C.chomp
+      TRACEPOINT_PROBE(random, urandom_read) {
+        bpf_trace_printk("%d\\n", args->got_bits);
+        return 0;
+      }
+    C
+
+    assert_equal(expected, Rubita.transpile(source))
+  end
 end

@@ -223,9 +223,26 @@ module Rubita
 
         escaped = escape_c_string(string_content[1])
         %Q("#{escaped}")
+      when :call
+        convert_call_arg(arg)
       else
         raise Error, "unsupported argument type: #{arg[0]}"
       end
+    end
+
+    def convert_call_arg(call_node)
+      receiver = call_node[1]
+      method_name_node = call_node[3]
+
+      return raise Error, "unsupported call receiver" unless receiver&.[](0) == :vcall
+      receiver_ident = receiver[1]
+      return raise Error, "unsupported receiver identifier" unless receiver_ident&.[](0) == :@ident
+
+      return raise Error, "unsupported method name" unless method_name_node&.[](0) == :@ident
+
+      receiver_name = receiver_ident[1]
+      method_name = method_name_node[1]
+      "#{receiver_name}->#{method_name}"
     end
 
     def escape_c_string(value)
