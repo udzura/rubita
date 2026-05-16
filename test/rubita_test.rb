@@ -218,4 +218,22 @@ class RubitaTest < Test::Unit::TestCase
 
     assert_equal(expected, Rubita.transpile(source))
   end
+
+  test "transpiles global variable method call with reference argument" do
+    source = <<~RUBY
+      def lookup_event(_ctx)
+        $events.lookup(key)
+        0
+      end
+    RUBY
+
+    expected = <<~C.chomp
+      int lookup_event(void *_ctx) {
+        events.lookup(&key);
+        return 0;
+      }
+    C
+
+    assert_equal(expected, Rubita.transpile(source))
+  end
 end

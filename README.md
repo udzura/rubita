@@ -1,35 +1,124 @@
 # Rubita
 
-TODO: Delete this and the text below, and describe your gem
+Rubita is a transpiler that converts a restricted Ruby DSL into BCC-compatible C code for eBPF programs.
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/rubita`. To experiment with that code, run `bin/console` for an interactive prompt.
+## Overview
+
+Rubita enables you to write eBPF probes and kernel tracing programs using a Ruby-like syntax, which are then transpiled into BCC (Berkeley Packet Filter Compiler Collection) compatible C code. This makes it easier to write complex eBPF programs while leveraging Ruby's expressiveness.
+
+### Supported Features
+
+- **Map Declarations**: Define eBPF hash maps with `BPF_HASH`
+- **Probe Definitions**: Support for `TRACEPOINT_PROBE`, `KFUNC_PROBE`, `KRETFUNC_PROBE`, and `LSM_PROBE`
+- **Method Definitions**: Define helper functions with `def`
+- **Field Access**: Convert Ruby dot notation (`obj.field`) to C pointer dereference (`obj->field`)
+- **String Literals**: Support format strings with proper escaping
 
 ## Installation
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
-
-Install the gem and add to the application's Gemfile by executing:
+Add this line to your application's Gemfile:
 
 ```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+gem 'rubita', github: 'udzura/rubita'
 ```
 
-If bundler is not being used to manage dependencies, install the gem by executing:
+And then execute:
 
 ```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+bundle install
+```
+
+## Basic Conversion
+
+### Hash Map Declaration
+
+**Ruby DSL:**
+```ruby
+BPF_HASH :events, key: :u64, value: :u64, size: 1024
+```
+
+**Generated C:**
+```c
+BPF_HASH(events, u64, u64, 1024);
+```
+
+### Tracepoint Probe
+
+**Ruby DSL:**
+```ruby
+TRACEPOINT_PROBE :syscalls, :sys_enter_open do
+  bpf_trace_printk("open syscall\n")
+  0
+end
+```
+
+**Generated C:**
+```c
+TRACEPOINT_PROBE(syscalls, sys_enter_open) {
+  bpf_trace_printk("open syscall\n");
+  return 0;
+}
+```
+
+### Kernel Function Probe
+
+**Ruby DSL:**
+```ruby
+KFUNC_PROBE :vfs_read do
+  bpf_trace_printk("Reading file: %d\n", args.got_bits)
+  0
+end
+```
+
+**Generated C:**
+```c
+KFUNC_PROBE(vfs_read) {
+  bpf_trace_printk("Reading file: %d\n", args->got_bits);
+  return 0;
+}
+```
+
+### Helper Functions
+
+**Ruby DSL:**
+```ruby
+def print_event(_ctx)
+  bpf_trace_printk("Event occurred\n")
+  0
+end
+```
+
+**Generated C:**
+```c
+int print_event(void *_ctx) {
+  bpf_trace_printk("Event occurred\n");
+  return 0;
+}
 ```
 
 ## Usage
 
-TODO: Write usage instructions here
+```ruby
+require 'rubita'
+
+ruby_code = <<~RUBY
+  BPF_HASH :counts, key: :u64, value: :u64, size: 10
+
+  TRACEPOINT_PROBE :syscalls, :sys_enter_openat do
+    bpf_trace_printk("openat\n")
+    0
+  end
+RUBY
+
+c_code = Rubita.transpile(ruby_code)
+puts c_code
+```
 
 ## Development
 
 After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake test` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
-
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/rubita.
+Bug reports and pull requests are welcome on GitHub at https://github.com/udzura/rubita.
+

@@ -187,9 +187,49 @@ module Rubita
     def convert_statement(statement)
       case statement[0]
       when :method_add_arg
-        convert_method_call(statement)
+        convert_method_call_statement(statement)
       else
         raise Error, "unsupported statement: #{statement[0]}"
+      end
+    end
+
+    def convert_method_call_statement(statement)
+      call_target = statement[1]
+      arg_part = statement[2]
+
+      case call_target[0]
+      when :fcall
+        convert_fcall_statement(call_target, arg_part)
+      when :call
+        convert_call_statement(call_target, arg_part)
+      else
+        raise Error, "unsupported call target type: #{call_target[0]}"
+      end
+    end
+
+    def convert_fcall_statement(call_target, arg_part)
+      method_ident = call_target[1]
+      return raise Error, "unsupported method identifier" unless method_ident[0] == :@ident
+
+      args = extract_args(arg_part)
+      "#{method_ident[1]}(#{args.join(', ')});"
+    end
+
+    def convert_call_statement(call_target, arg_part)
+      receiver = call_target[1]
+      method_name_node = call_target[3]
+
+      return raise Error, "unsupported call method name" unless method_name_node&.[](0) == :@ident
+
+      method_name = method_name_node[1]
+
+      # Check if receiver is a global variable
+      if receiver&.[](0) == :var_ref && receiver[1]&.[](0) == :@gvar
+        gvar_name = receiver[1][1].delete_prefix("$")
+        args = extract_args_with_reference(arg_part)
+        "#{gvar_name}.#{method_name}(#{args.join(', ')});"
+      else
+        raise Error, "unsupported call receiver type: #{receiver&.[](0)}"
       end
     end
 
@@ -203,6 +243,35 @@ module Rubita
 
       args = extract_args(arg_part)
       "#{method_ident[1]}(#{args.join(', ')});"
+    end
+
+    def extract_args_with_reference(arg_part)
+      return raise Error, "unsupported arg format" unless arg_part[0] == :arg_paren
+
+      args_add_block = arg_part[1]
+      return raise Error, "unsupported arg list" unless args_add_block[0] == :args_add_block
+
+      raw_args = args_add_block[1]
+      raw_args.map { |arg| convert_arg_with_reference(arg) }
+    end
+
+    def convert_arg_with_reference(arg)
+      case arg[0]
+      when :vcall
+        arg_ident = arg[1]
+        return raise Error, "unsupported variable call" unless arg_ident&.[](0) == :@ident
+        "&#{arg_ident[1]}"
+      when :string_literal
+        string_content = arg.dig(1, 1)
+        return raise Error, "unsupported string format" unless string_content&.[](0) == :@tstring_content
+
+        escaped = escape_c_string(string_content[1])
+        %Q("#{escaped}")
+      when :call
+        convert_call_arg(arg)
+      else
+        raise Error, "unsupported argument type for reference: #{arg[0]}"
+      end
     end
 
     def extract_args(arg_part)
