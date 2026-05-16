@@ -14,6 +14,8 @@ module Rubita
           convert_definition(node)
         when :command
           convert_top_level_command(node)
+        when :method_add_block
+          convert_top_level_block(node)
         else
           raise Error, "unsupported top-level node: #{node[0]}"
         end
@@ -43,6 +45,51 @@ module Rubita
       else
         raise Error, "unsupported command: #{ident[1]}"
       end
+    end
+
+    def convert_top_level_block(node)
+      call_node = node[1]
+      block_node = node[2]
+
+      return raise Error, "unsupported block call" unless call_node&.[](0) == :command
+
+      ident = call_node[1]
+      return raise Error, "unsupported block command format" unless ident&.[](0) == :@const
+
+      case ident[1]
+      when "TRACEPOINT_PROBE"
+        convert_probe_block(call_node, block_node, "TRACEPOINT_PROBE", 2)
+      when "KFUNC_PROBE"
+        convert_probe_block(call_node, block_node, "KFUNC_PROBE", 1)
+      when "KRETFUNC_PROBE"
+        convert_probe_block(call_node, block_node, "KRETFUNC_PROBE", 1)
+      when "LSM_PROBE"
+        convert_probe_block(call_node, block_node, "LSM_PROBE", 1)
+      else
+        raise Error, "unsupported block command: #{ident[1]}"
+      end
+    end
+
+    def convert_probe_block(call_node, block_node, macro_name, arg_count)
+      args_add_block = call_node[2]
+      return raise Error, "unsupported #{macro_name} args" unless args_add_block&.[](0) == :args_add_block
+
+      raw_args = args_add_block[1]
+      return raise Error, "#{macro_name} requires #{arg_count} arguments" unless raw_args.is_a?(Array) && raw_args.size == arg_count
+
+      macro_args = raw_args.map { |arg| convert_symbol_literal(arg) }
+
+      return raise Error, "#{macro_name} requires do ... end block" unless block_node&.[](0) == :do_block
+      bodystmt = block_node[2]
+      statements, return_value = extract_body_statements_and_return_from_bodystmt(bodystmt)
+
+      c_lines = ["#{macro_name}(#{macro_args.join(', ')}) {"]
+      statements.each do |statement|
+        c_lines << "  #{convert_statement(statement)}"
+      end
+      c_lines << "  return #{return_value};"
+      c_lines << "}"
+      c_lines.join("\n")
     end
 
     def convert_hashmap_command(node)
@@ -124,6 +171,10 @@ module Rubita
 
     def extract_body_statements_and_return(def_node)
       bodystmt = def_node[3]
+      extract_body_statements_and_return_from_bodystmt(bodystmt)
+    end
+
+    def extract_body_statements_and_return_from_bodystmt(bodystmt)
       stmts = bodystmt[1]
       return raise Error, "method body is missing" unless stmts.is_a?(Array) && !stmts.empty?
 

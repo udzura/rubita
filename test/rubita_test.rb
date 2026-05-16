@@ -88,4 +88,98 @@ class RubitaTest < Test::Unit::TestCase
 
     assert_equal(expected, Rubita.transpile(source))
   end
+
+  test "transpiles TRACEPOINT_PROBE DSL" do
+    source = <<~RUBY
+      TRACEPOINT_PROBE :syscalls, :sys_enter_openat do |_ctx|
+        bpf_trace_printk("openat\\n")
+        0
+      end
+    RUBY
+
+    expected = <<~C.chomp
+      TRACEPOINT_PROBE(syscalls, sys_enter_openat) {
+        bpf_trace_printk("openat\\n");
+        return 0;
+      }
+    C
+
+    assert_equal(expected, Rubita.transpile(source))
+  end
+
+  test "transpiles BPF_HASH and TRACEPOINT_PROBE together" do
+    source = <<~RUBY
+      BPF_HASH :counts, key: :u64, value: :u64, size: 10
+
+      TRACEPOINT_PROBE :syscalls, :sys_enter_openat do |_ctx|
+        bpf_trace_printk("openat\\n")
+        0
+      end
+    RUBY
+
+    expected = <<~C.chomp
+      BPF_HASH(counts, u64, u64, 10);
+
+      TRACEPOINT_PROBE(syscalls, sys_enter_openat) {
+        bpf_trace_printk("openat\\n");
+        return 0;
+      }
+    C
+
+    assert_equal(expected, Rubita.transpile(source))
+  end
+
+  test "transpiles KFUNC_PROBE DSL" do
+    source = <<~RUBY
+      KFUNC_PROBE :vfs_read do |_ctx|
+        bpf_trace_printk("kfunc\\n")
+        0
+      end
+    RUBY
+
+    expected = <<~C.chomp
+      KFUNC_PROBE(vfs_read) {
+        bpf_trace_printk("kfunc\\n");
+        return 0;
+      }
+    C
+
+    assert_equal(expected, Rubita.transpile(source))
+  end
+
+  test "transpiles KRETFUNC_PROBE DSL" do
+    source = <<~RUBY
+      KRETFUNC_PROBE :vfs_read do |_ctx|
+        bpf_trace_printk("kretfunc\\n")
+        0
+      end
+    RUBY
+
+    expected = <<~C.chomp
+      KRETFUNC_PROBE(vfs_read) {
+        bpf_trace_printk("kretfunc\\n");
+        return 0;
+      }
+    C
+
+    assert_equal(expected, Rubita.transpile(source))
+  end
+
+  test "transpiles LSM_PROBE DSL" do
+    source = <<~RUBY
+      LSM_PROBE :file_open do |_ctx|
+        bpf_trace_printk("lsm\\n")
+        0
+      end
+    RUBY
+
+    expected = <<~C.chomp
+      LSM_PROBE(file_open) {
+        bpf_trace_printk("lsm\\n");
+        return 0;
+      }
+    C
+
+    assert_equal(expected, Rubita.transpile(source))
+  end
 end
